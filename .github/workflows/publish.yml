@@ -1,10 +1,11 @@
 name: Publish to PyPI and GitHub Release
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 保留手动触发
   push:
-    paths:
-      - 'setup.py'
+    tags:
+      - 'v*.*.*' # 仅在推送 vX.Y.Z 格式的标签时触发
+    # 不再需要 paths 过滤，因为我们只关心标签
 
 jobs:
   publish:
