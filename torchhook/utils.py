@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+"""
+# Author: Zaiyan Zhang
+# Email: 1@zzaiyan.com
+#
+# Copyright (c) 2025. All rights reserved.
+# This code is licensed under the MIT License.
+# For more details, see the LICENSE file in the project root.
+"""
+
 import torch
 from typing import Dict
 

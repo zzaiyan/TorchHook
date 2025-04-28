@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='torchhook',
-    version='0.1.3',
+    version='0.1.5',
     author='Zaiyan Zhang',
     author_email='1@zzaiyan.com',
     description='TouchHook: A PyTorch hook management library',
