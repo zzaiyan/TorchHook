@@ -1,1 +1,2 @@
-from .hookmanager import HookManager
+from .utils import *
+from .hookmanager import *

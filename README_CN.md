@@ -1,6 +1,13 @@
+![TorchHook Logo](assets/logo.png)
+
 # TorchHook
 
-TorchHook 是一个用于管理 PyTorch 模型 Hook 的库，提供了便捷的接口来捕获特征图和调试模型。
+TorchHook 是一个用于管理 PyTorch 模型 Hook 的库，提供了方便的接口来捕获特征图和调试模型。
+
+## 功能特点
+- **简化 Hook 管理**：简化在 PyTorch 模型中注册和管理 Hook 的过程。
+- **特征图提取**：捕获中间特征图以便分析和调试。
+- **高度可定制**：支持自定义 Hook 名称和灵活的使用方式。
 
 ## 安装
 
@@ -78,7 +85,7 @@ hook_manager.clear_features()
 
 输出示例：
 ```sh
-Model: MyModel
+Model: MyModel | Total Parameters: 144.46 K
 Layer Name                    Feature Count       Feature Shape                 
 --------------------------------------------------------------------------------
 conv1                         5                   (2, 16, 30, 30)               
@@ -91,9 +98,9 @@ conv1: torch.Size([2, 16, 30, 30])
    fc: torch.Size([2, 10])
 
 Mean and Std of features:
-Layer: conv1, Mean: -0.0060, Std: 0.5978
-Layer: ReLU_0, Mean: 0.2344, Std: 0.3463
-Layer: CustomName, Mean: 0.0245, Std: 0.2332
+Layer: conv1, Mean: -0.0460, Std: 0.5873
+Layer: ReLU_0, Mean: 0.2116, Std: 0.3276
+Layer: CustomName, Mean: -0.0596, Std: 0.2248
 ```
 
 ## 许可证

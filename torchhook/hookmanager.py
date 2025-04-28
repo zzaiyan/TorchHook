@@ -11,6 +11,7 @@
 
 import torch
 from typing import Dict, List, Union, Optional, Callable
+from .utils import format_parameter_count, count_parameters
 
 
 class HookManager:
@@ -262,6 +263,10 @@ class HookManager:
 
         # 如果有特征图，正常显示信息
         output = [f"Model: {self.model.__class__.__name__}"]
+        # 获取模型参数总量
+        total_params = count_parameters(self.model)
+        output[0] += f" | Total Parameters: {format_parameter_count(total_params)}"
+
         output.append(
             f"{'Layer Name':<30}{'Feature Count':<20}{'Feature Shape':<30}")
         output.append("-" * 80)

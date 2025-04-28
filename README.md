@@ -1,6 +1,13 @@
+![TorchHook Logo](assets/logo.png)
+
 # TorchHook
 
 TorchHook is a library for managing PyTorch model hooks, providing convenient interfaces to capture feature maps and debug models.
+
+## Features
+- **Easy Hook Management**: Simplify the process of registering and managing hooks in PyTorch models.
+- **Feature Map Extraction**: Capture intermediate feature maps for analysis and debugging.
+- **Customizable**: Support for custom hook names and flexible usage.
 
 ## Installation
 
@@ -78,7 +85,7 @@ hook_manager.clear_features()
 
 Example Output:
 ```sh
-Model: MyModel
+Model: MyModel | Total Parameters: 144.46 K
 Layer Name                    Feature Count       Feature Shape                 
 --------------------------------------------------------------------------------
 conv1                         5                   (2, 16, 30, 30)               
@@ -91,9 +98,9 @@ conv1: torch.Size([2, 16, 30, 30])
    fc: torch.Size([2, 10])
 
 Mean and Std of features:
-Layer: conv1, Mean: -0.0060, Std: 0.5978
-Layer: ReLU_0, Mean: 0.2344, Std: 0.3463
-Layer: CustomName, Mean: 0.0245, Std: 0.2332
+Layer: conv1, Mean: -0.0460, Std: 0.5873
+Layer: ReLU_0, Mean: 0.2116, Std: 0.3276
+Layer: CustomName, Mean: -0.0596, Std: 0.2248
 ```
 
 ## License
