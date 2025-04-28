@@ -42,23 +42,13 @@ jobs:
         version=$(python setup.py --version)
         echo "::set-output name=version::$version"
 
-    - name: Create GitHub Release
+    - name: Create GitHub Release # Re-add this step
       uses: actions/create-release@v1
-      id: create_release
       env:
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Use default GITHUB_TOKEN
       with:
         tag_name: v${{ steps.get_version.outputs.version }}
         release_name: Release v${{ steps.get_version.outputs.version }}
         draft: false
         prerelease: false
-
-    - name: Upload Release Assets
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/*.tar.gz
-        asset_name: torchhook-${{ steps.get_version.outputs.version }}.tar.gz
-        asset_content_type: application/gzip
+        # No body or assets needed as per user request
