@@ -10,6 +10,7 @@ on:
 # Add permissions here
 permissions:
   contents: write
+  packages: write # Add packages write permission
 
 jobs:
   publish:
@@ -40,11 +41,21 @@ jobs:
       run: |
         python -m twine upload --skip-existing dist/* # Add --skip-existing flag
 
+    # Add step to publish to GitHub Packages
+    - name: Publish to GitHub Packages
+      env:
+        TWINE_USERNAME: __token__ # Use __token__ for username with GITHUB_TOKEN
+        TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Publish to GitHub Packages Registry
+        # The URL format is https://pypi.pkg.github.com/OWNER/
+        python -m twine upload --repository-url https://pypi.pkg.github.com/${{ github.repository_owner }}/ --skip-existing dist/*
+
     - name: Extract version
       id: get_version
       run: |
         version=$(python setup.py --version)
-        echo "::set-output name=version::$version"
+        echo "version=$version" >> $GITHUB_OUTPUT # Use new syntax for setting output
 
     - name: Create GitHub Release # Re-add this step
       uses: actions/create-release@v1
