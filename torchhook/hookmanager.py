@@ -43,7 +43,7 @@ class HookManager:
         custom_hook: Optional[Callable] = None,
         output_transform: Optional[Callable[[
             torch.Tensor], torch.Tensor]] = None
-    ):
+    ) -> torch.utils.hooks.RemovableHandle:
         """
         为指定层注册 forward hook。
 
@@ -52,6 +52,9 @@ class HookManager:
         - layer (Optional[torch.nn.Module]): 直接传入的 nn.Module 实例（可选）。优先使用此参数。
         - custom_hook (Optional[Callable]): 自定义 hook 函数（可选）。如果未提供，则使用默认的保存特征图的 hook。
         - output_transform (Optional[Callable]): 自定义函数，用于对 output 张量进行处理（可选）。
+
+        返回:
+        - torch.utils.hooks.RemovableHandle: 注册的 hook 的句柄，可用于移除 hook。
 
         异常:
         - TypeError: 如果参数类型不符合要求。
@@ -113,6 +116,39 @@ class HookManager:
         hook = layer.register_forward_hook(hook_function)
         self.hooks.append(hook)
 
+        return hook
+
+    def add(
+        self,
+        layer_name: Optional[str] = None,
+        layer: Optional[torch.nn.Module] = None,
+        custom_hook: Optional[Callable] = None,
+        output_transform: Optional[Callable[[
+            torch.Tensor], torch.Tensor]] = None
+    ) -> torch.utils.hooks.RemovableHandle:
+        """
+        (alias of register_forward_hook) 为指定层注册 forward hook。
+
+        参数:
+        - layer_name (Optional[str]): 层的名称（可选）。如果未指定 layer，则根据 layer_name 在模型中查找层。
+        - layer (Optional[torch.nn.Module]): 直接传入的 nn.Module 实例（可选）。优先使用此参数。
+        - custom_hook (Optional[Callable]): 自定义 hook 函数（可选）。如果未提供，则使用默认的保存特征图的 hook。
+        - output_transform (Optional[Callable]): 自定义函数，用于对 output 张量进行处理（可选）。
+
+        返回:
+        - torch.utils.hooks.RemovableHandle: 注册的 hook 的句柄，可用于移除 hook。
+
+        异常:
+        - TypeError: 如果参数类型不符合要求。
+        - ValueError: 如果同时提供 custom_hook 和 output_transform，或未指定 layer_name 和 layer。
+        """
+        return self.register_forward_hook(
+            layer_name=layer_name,
+            layer=layer,
+            custom_hook=custom_hook,
+            output_transform=output_transform
+        )
+
     def get_features(self, key: str) -> Union[torch.Tensor, List[torch.Tensor]]:
         """
         获取指定层的特征图。
@@ -152,6 +188,29 @@ class HookManager:
         - List[str]: 一个列表，包含所有捕获特征图的键。
         """
         return list(self.features.keys())
+
+    def remove(self, key: str):
+        """
+        删除指定 key 对应的 hook 和存储的特征图。
+
+        参数:
+        - key (str): 要删除的层的名称或唯一标识符。
+
+        异常:
+        - ValueError: 如果指定的 key 不存在。
+        """
+        if key not in self.features:
+            raise ValueError(f"No features or hooks found for key '{key}'.")
+
+        # 删除特征图
+        del self.features[key]
+
+        # 删除对应的 hook
+        for hook in self.hooks:
+            if hasattr(hook, 'layer_name') and hook.layer_name == key:
+                hook.remove()
+                self.hooks.remove(hook)
+                break
 
     def clear_hooks(self):
         """
