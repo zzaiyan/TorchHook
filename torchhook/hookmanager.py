@@ -256,7 +256,7 @@ class HookManager:
 
     def clear_hooks(self):
         """
-        移除所有已注册的 hooks。
+        移除所有已注册的 hooks，并清空特征图列表。
 
         异常:
         - TypeError: 如果 hooks 不是字典，或字典中的值没有 remove 方法。
@@ -273,18 +273,19 @@ class HookManager:
             # Optionally remove the key from the dictionary immediately,
             # although clear() will handle it later.
             # del self.hooks[key]
+        # 清空特征图列表
         self.hooks.clear()
+        self.features.clear()  # 需要保持 hooks 和 features 的一致性
 
     def clear_features(self):
         """
-        清空已捕获的特征图。
-
-        异常:
-        - TypeError: 如果 features 不是字典。
+        清空所有已捕获的特征图，但保留 hook 键。
         """
         if not isinstance(self.features, dict):
             raise TypeError("'features' must be a dictionary.")
-        self.features.clear()
+        # 遍历字典中的每个列表并清空它
+        for key in self.features:
+            self.features[key].clear()
 
     def summary(self):
         """
