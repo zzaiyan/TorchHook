@@ -15,33 +15,39 @@ from .utils import format_parameter_count, count_parameters
 
 
 class HookManager:
-    def __init__(self, model: torch.nn.Module, last_only: bool = False):
+    def __init__(self, model: torch.nn.Module, max_size: int = -1):
         """
         初始化 HookManager。
 
         参数:
         - model (torch.nn.Module): 需要添加 hook 的 PyTorch 模型。
-        - last_only (bool): 是否只保存最后一个特征图。如果为 False，则保存所有特征图。
+        - max_size (int): 每个 hook 最多保存的特征图数量。默认为 -1，表示不限制数量。
+                          如果为 1，则只保留最新的特征图。
 
         异常:
-        - TypeError: 如果 model 不是 torch.nn.Module 实例，或 last_only 不是布尔值。
+        - TypeError: 如果 model 不是 torch.nn.Module 实例，或 max_size 不是整数。
+        - ValueError: 如果 max_size 小于 -1。
         """
         if not isinstance(model, torch.nn.Module):
             raise TypeError("'model' must be an instance of torch.nn.Module.")
-        if not isinstance(last_only, bool):
-            raise TypeError("'last_only' must be a boolean.")
+        if not isinstance(max_size, int):
+            raise TypeError("'max_size' must be an integer.")
+        if max_size < -1:
+            raise ValueError("'max_size' cannot be less than -1.")
+
 
         self.model = model
-        self.last_only = last_only
+        self.max_size = max_size
         self.hooks: Dict[str, torch.utils.hooks.RemovableHandle] = {}
-        self.features: Union[Dict[str, torch.Tensor],
-                             Dict[str, List[torch.Tensor]]] = {}
+        # 特征始终存储在列表中
+        self.features: Dict[str, List[torch.Tensor]] = {}
 
     def register_forward_hook(
         self,
         layer_name: Optional[str] = None,
         layer: Optional[torch.nn.Module] = None,
-        custom_hook: Optional[Callable[[torch.nn.Module, Any, Any], None]] = None,
+        custom_hook: Optional[Callable[[
+            torch.nn.Module, Any, Any], None]] = None,
         output_transform: Optional[Callable[[
             torch.Tensor], torch.Tensor]] = None
     ) -> torch.utils.hooks.RemovableHandle:
@@ -83,13 +89,14 @@ class HookManager:
             if _layer is None:
                 raise ValueError(
                     f"Layer '{layer_name}' not found in the model.")
-            layer = _layer # Assign found layer back to layer variable
+            layer = _layer  # Assign found layer back to layer variable
         else:
             # 如果直接提供了 layer，需要确定一个 key
             if layer_name is None:
                 # 生成一个唯一的 key
                 layer_class_name = layer.__class__.__name__
-                layer_index = len([k for k in self.hooks.keys() if k.startswith(layer_class_name + '_')])
+                layer_index = len(
+                    [k for k in self.hooks.keys() if k.startswith(layer_class_name + '_')])
                 layer_name = f"{layer_class_name}_{layer_index}"
 
         # 检查 key 是否已存在
@@ -98,6 +105,9 @@ class HookManager:
 
         # 确定最终的 key
         key = layer_name
+
+        # 始终初始化特征列表
+        self.features[key] = []
 
         # 默认的 hook 函数
         def default_callback(module, input, output):
@@ -111,19 +121,24 @@ class HookManager:
             transform_fn = output_transform or default_output_transform
             processed_output = transform_fn(output)
 
-            if self.last_only:
-                self.features[current_key] = processed_output
-            else:
-                if current_key not in self.features:
-                    self.features[current_key] = []
-                self.features[current_key].append(processed_output)
+            # 获取当前键对应的特征列表
+            feature_list = self.features[current_key]
+
+            # 添加新特征
+            feature_list.append(processed_output)
+
+            # 如果设置了 max_size 且列表长度超过限制，则移除旧特征
+            if self.max_size > 0 and len(feature_list) > self.max_size:
+                # 从列表开头移除多余的元素
+                del feature_list[:-self.max_size]
+
 
         # 使用自定义 hook 或默认 hook
         hook_function = custom_hook or default_callback
 
         # 注册 hook 并保存句柄
         hook = layer.register_forward_hook(hook_function)
-        self.hooks[key] = hook # Store hook handle in the dictionary
+        self.hooks[key] = hook  # Store hook handle in the dictionary
 
         return hook
 
@@ -131,7 +146,8 @@ class HookManager:
         self,
         layer_name: Optional[str] = None,
         layer: Optional[torch.nn.Module] = None,
-        custom_hook: Optional[Callable[[torch.nn.Module, Any, Any], None]] = None,
+        custom_hook: Optional[Callable[[
+            torch.nn.Module, Any, Any], None]] = None,
         output_transform: Optional[Callable[[
             torch.Tensor], torch.Tensor]] = None
     ) -> torch.utils.hooks.RemovableHandle:
@@ -158,34 +174,44 @@ class HookManager:
             output_transform=output_transform
         )
 
-    def get_features(self, key: str) -> Union[torch.Tensor, List[torch.Tensor]]:
+    def get_features(self, key: str) -> List[torch.Tensor]:
         """
-        获取指定层的特征图。
+        获取指定层的特征图列表。
 
         参数:
         - key (str): 层的名称（layer_name）或唯一标识符。
 
         返回:
-        - Union[torch.Tensor, List[torch.Tensor]]: 如果 last_only=True，返回最后一个特征图 (torch.Tensor)；
-          如果 last_only=False，返回所有特征图 (List[torch.Tensor])。
+        - List[torch.Tensor]: 包含捕获的特征图的列表。列表的长度受初始化时的 `max_size` 限制。
+                           如果 hook 尚未触发，则返回空列表。
 
         异常:
         - TypeError: 如果 key 不是字符串。
-        - ValueError: 如果指定的 key 不存在。
+        - ValueError: 如果指定的 key 未注册 hook。
         """
         if not isinstance(key, str):
             raise TypeError("'key' must be a string.")
-        if key not in self.features:
-            raise ValueError(f"No features captured for layer '{key}'.")
 
+        # 检查 hook 是否已注册
+        if key not in self.hooks:
+            raise ValueError(f"No hook registered with key '{key}'.")
+
+        # 检查特征列表是否存在（理论上总存在，因为注册时会创建）
+        if key not in self.features:
+            # 这表示内部状态可能不一致
+            raise ValueError(
+                f"Inconsistent state: Hook '{key}' registered but no feature entry found.")
+
+        # 直接返回特征列表（可能为空）
         return self.features[key]
 
-    def get_all(self) -> Dict[str, Union[torch.Tensor, List[torch.Tensor]]]:
+    def get_all(self) -> Dict[str, List[torch.Tensor]]:
         """
         获取所有捕获的特征图。
 
         返回:
-        - Dict[str, Union[torch.Tensor, List[torch.Tensor]]]: 一个字典，键为层名称或唯一标识符，值为对应的特征图。
+        - Dict[str, List[torch.Tensor]]: 一个字典，键为层名称或唯一标识符，值为对应的特征图列表。
+          每个列表的长度受初始化时的 `max_size` 限制。
         """
         return self.features
 
@@ -196,7 +222,7 @@ class HookManager:
         返回:
         - List[str]: 一个列表，包含所有捕获特征图的键。
         """
-        return list(self.features.keys())
+        return list(self.hooks.keys())
 
     def remove(self, key: str):
         """
@@ -224,7 +250,7 @@ class HookManager:
         else:
             # 如果 hook 不存在，但特征存在（理论上不应发生，除非手动修改了字典），也提示一下
             if key not in self.features:
-                 raise ValueError(f"No hook or features found for key '{key}'.")
+                raise ValueError(f"No hook or features found for key '{key}'.")
             # If features existed but hook didn't, the feature part is already removed.
             # No exception needed here if features were removed.
 
@@ -237,7 +263,7 @@ class HookManager:
         """
         if not isinstance(self.hooks, dict):
             raise TypeError("'hooks' must be a dictionary of hook handles.")
-        for key, hook in list(self.hooks.items()): # Iterate over a copy of items
+        for key, hook in list(self.hooks.items()):  # Iterate over a copy of items
             if not hasattr(hook, "remove") or not callable(hook.remove):
                 # This check might be redundant if RemovableHandle is always used,
                 # but kept for safety.
@@ -265,6 +291,15 @@ class HookManager:
         打印当前模型的名称、已注册的 hook 信息、特征数量和特征图形状。
         """
         print(self.__str__())
+        
+    def __repr__(self):
+        """
+        重载 __repr__ 方法，优化 print(hook_manager) 的输出。
+
+        返回:
+        - str: 包含模型名称、已注册的 hook 信息、特征数量和特征图形状的字符串。
+        """
+        return self.__str__()
 
     def __str__(self):
         """
@@ -274,64 +309,54 @@ class HookManager:
         - str: 包含模型名称、已注册的 hook 信息、特征数量和特征图形状的字符串。
         """
         registered_hooks_count = len(self.hooks)
-        captured_features_count = len(self.features)
+        hook_keys = list(self.hooks.keys())
 
         model_name_line = f"Model: {self.model.__class__.__name__}"
-        # 获取模型参数总量
         try:
             total_params = count_parameters(self.model)
             model_name_line += f" | Total Parameters: {format_parameter_count(total_params)}"
-        except Exception: # Handle potential errors during parameter counting
-             model_name_line += " | Total Parameters: N/A"
-
+        except Exception:
+            model_name_line += " | Total Parameters: N/A"
 
         if registered_hooks_count == 0:
-            # 如果没有注册任何 hook
             return f"{model_name_line}\nNo hooks have been registered."
 
-        if captured_features_count == 0:
-            # 如果没有捕获到任何特征图
-            hook_keys = list(self.hooks.keys())
+        has_captured_features = any(len(lst) > 0 for lst in self.features.values())
+
+        if not has_captured_features:
             return f"{model_name_line}\n{registered_hooks_count} hooks registered ({', '.join(hook_keys)}), but no features have been captured yet."
 
-        # 如果有特征图，正常显示信息
         output = [model_name_line]
-        output.append(f"Registered Hooks: {registered_hooks_count}")
+        output.append(f"Registered Hooks: {registered_hooks_count} (max_size={self.max_size if self.max_size > 0 else 'unlimited'})") # 显示 max_size
         output.append("-" * 80)
         output.append("Captured Features Summary:")
         output.append(
             f"{'Layer Key':<30}{'Feature Count':<20}{'Feature Shape':<30}")
         output.append("-" * 80)
 
-        # Iterate through captured features
-        for key, value in self.features.items():
-            if isinstance(value, torch.Tensor):
-                # 如果只保存最后一个特征图
-                feature_count = 1
-                feature_shape = tuple(value.shape)
-            elif isinstance(value, list):
-                # 如果保存所有特征图
-                feature_count = len(value)
-                feature_shape = tuple(
-                    value[0].shape) if feature_count > 0 else "N/A"
+        triggered_hooks_count = 0
+        untriggered_hooks = []
+
+        for key in hook_keys:
+            value = self.features.get(key, [])
+            feature_count = len(value)
+            feature_shape = tuple(value[0].shape) if feature_count > 0 else "N/A"
+
+            if feature_count > 0:
+                output.append(
+                    f"{key:<30}{str(feature_count):<20}{str(feature_shape):<30}")
+                triggered_hooks_count += 1
             else:
-                # Should not happen with default callback, but handle defensively
-                feature_count = "N/A"
-                feature_shape = "N/A"
+                untriggered_hooks.append(key)
 
-            output.append(
-                f"{key:<30}{str(feature_count):<20}{str(feature_shape):<30}")
-
-        # Add keys for hooks that haven't captured features yet
-        captured_keys = set(self.features.keys())
-        untriggered_hooks = [key for key in self.hooks.keys() if key not in captured_keys]
         if untriggered_hooks:
-            output.append("-" * 80)
+            if triggered_hooks_count == 0:
+                output = output[:3]
+            else:
+                output.append("-" * 80)
             output.append("Hooks Registered but Not Triggered Yet:")
             for key in untriggered_hooks:
-                 output.append(f"- {key}")
-
+                output.append(f"- {key}")
 
         output.append("-" * 80)
-
         return "\n".join(output)
