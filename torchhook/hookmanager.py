@@ -10,7 +10,7 @@
 
 
 import torch
-import warnings # Import the warnings module
+import warnings
 from typing import Dict, List, Union, Optional, Callable, Any
 from .utils import format_parameter_count, count_parameters
 
@@ -36,7 +36,6 @@ class HookManager:
         if max_size < -1:
             raise ValueError("'max_size' cannot be less than -1.")
 
-
         self.model = model
         self.max_size = max_size
         self.hooks: Dict[str, torch.utils.hooks.RemovableHandle] = {}
@@ -48,7 +47,7 @@ class HookManager:
         layer_name: Optional[str] = None,
         layer: Optional[torch.nn.Module] = None,
         custom_hook: Optional[Callable[[
-            torch.nn.Module, Any, Any], Optional[torch.Tensor]]] = None, # Modified signature hint
+            torch.nn.Module, Any, Any], Optional[torch.Tensor]]] = None,  # Modified signature hint
         output_transform: Optional[Callable[[
             torch.Tensor], torch.Tensor]] = None
     ) -> torch.utils.hooks.RemovableHandle:
@@ -130,23 +129,23 @@ class HookManager:
                         tensor_to_store = result
                     else:
                         # 使用 warnings.warn 替换 print
-                        warnings.warn(f"custom_hook for key '{current_key}' returned a non-Tensor value ({type(result)}). Ignoring.", stacklevel=2)
+                        warnings.warn(
+                            f"custom_hook for key '{current_key}' returned a non-Tensor value ({type(result)}). Ignoring.", stacklevel=2)
                         # 或者 raise TypeError(...)
             else:
                 # 如果没有自定义 hook，使用 output_transform 或默认 transform
                 transform_fn = output_transform or default_output_transform
                 # 确保 output 是 Tensor 或可以转换为 Tensor
                 if isinstance(output, torch.Tensor):
-                     tensor_to_store = transform_fn(output)
+                    tensor_to_store = transform_fn(output)
                 elif isinstance(output, (list, tuple)) and len(output) > 0 and isinstance(output[0], torch.Tensor):
-                     # 处理模型输出是元组或列表的情况
-                     tensor_to_store = transform_fn(output[0])
-                     # 使用 warnings.warn 替换 print
-                     warnings.warn(f"Output for key '{current_key}' is a sequence; processing the first element. Use 'output_transform' for custom handling.", stacklevel=2)
+                    # 处理模型输出是元组或列表的情况
+                    tensor_to_store = transform_fn(output[0])
+                    warnings.warn(
+                        f"Output for key '{current_key}' is a sequence; processing the first element. Use 'output_transform' for custom handling.", stacklevel=2)
                 else:
-                     # 使用 warnings.warn 替换 print
-                     warnings.warn(f"Output for key '{current_key}' is not a Tensor or a sequence starting with a Tensor ({type(output)}). Cannot store.", stacklevel=2)
-
+                    warnings.warn(
+                        f"Output for key '{current_key}' is not a Tensor or a sequence starting with a Tensor ({type(output)}). Cannot store.", stacklevel=2)
 
             # 如果获得了要存储的 Tensor
             if tensor_to_store is not None:
@@ -315,7 +314,7 @@ class HookManager:
         打印当前模型的名称、已注册的 hook 信息、特征数量和特征图形状。
         """
         print(self.__str__())
-        
+
     def __repr__(self):
         """
         重载 __repr__ 方法，优化 print(hook_manager) 的输出。
@@ -345,13 +344,16 @@ class HookManager:
         if registered_hooks_count == 0:
             return f"{model_name_line}\nNo hooks have been registered."
 
-        has_captured_features = any(len(lst) > 0 for lst in self.features.values())
+        has_captured_features = any(
+            len(lst) > 0 for lst in self.features.values())
 
         if not has_captured_features:
             return f"{model_name_line}\n{registered_hooks_count} hooks registered ({', '.join(hook_keys)}), but no features have been captured yet."
 
         output = [model_name_line]
-        output.append(f"Registered Hooks: {registered_hooks_count} (max_size={self.max_size if self.max_size > 0 else 'unlimited'})") # 显示 max_size
+        # 显示 max_size
+        output.append(
+            f"Registered Hooks: {registered_hooks_count} (max_size={self.max_size if self.max_size > 0 else 'unlimited'})")
         output.append("-" * 80)
         output.append("Captured Features Summary:")
         output.append(
@@ -364,7 +366,8 @@ class HookManager:
         for key in hook_keys:
             value = self.features.get(key, [])
             feature_count = len(value)
-            feature_shape = tuple(value[0].shape) if feature_count > 0 else "N/A"
+            feature_shape = tuple(
+                value[0].shape) if feature_count > 0 else "N/A"
 
             if feature_count > 0:
                 output.append(

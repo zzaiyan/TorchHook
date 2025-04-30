@@ -2,107 +2,75 @@
 
 # TorchHook
 
-TorchHook 是一个用于管理 PyTorch 模型 Hook 的库，提供了方便的接口来捕获特征图和调试模型。
+[![PyPI version](https://badge.fury.io/py/torchhook.svg)](https://badge.fury.io/py/torchhook)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/torchhook.svg)](https://pypi.org/project/torchhook/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/torchhook.svg)](https://pypi.org/project/torchhook/)
 
-## 功能特点
-- **简化 Hook 管理**：简化在 PyTorch 模型中注册和管理 Hook 的过程。
-- **特征图提取**：捕获中间特征图以便分析和调试。
-- **高度可定制**：支持自定义 Hook 名称和灵活的使用方式。
+[English Blog](./BLOG.md) | [中文博客](./BLOG_CN.md) | [English Readme](./README.md)
+
+TorchHook 是一个轻量级、易于使用的 Python 库，旨在简化从 PyTorch 模型中提取中间特征的过程。它提供简洁的 API 来管理 PyTorch 的钩子（Hooks），以便捕获层输出，而无需编写重复的模板代码。
+
+## 主要特性
+
+- **轻松注册 Hook**：通过层名称或层对象快速为所需模型层注册钩子。
+- **灵活提取特征**：方便地检索捕获到的特征。
+- **高度可定制**：可定义自定义的钩子逻辑或输出转换函数。
+- **资源管理**：自动清理已注册的钩子。
 
 ## 安装
 
 ```bash
 pip install torchhook
 ```
+或者从本地源码安装：
+```bash
+git clone https://github.com/zzaiyan/TorchHook.git
+cd TorchHook
+pip install .
+```
 
-## 使用示例
+## 快速上手
 
 ```python
 import torch
-import torch.nn as nn
+import torchvision.models as models
+# 导入我们的库 TorchHook
 from torchhook import HookManager
 
-# 定义一个简单的模型
-class MyModel(nn.Module):
-    def __init__(self):
-        super(MyModel, self).__init__()
-        self.conv1 = nn.Conv2d(3, 16, 3)
-        self.relu = nn.ReLU()
-        self.fc = nn.Linear(16 * 30 * 30, 10)
+# 1. 加载你的模型
+model = models.resnet18()
+model.eval() # 设置为评估模式
 
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.relu(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-        return x
+# 2. 初始化 HookManager
+# max_size=1 表示每个 hook 只保留最新的特征图
+hook_manager = HookManager(model, max_size=1)
 
-# 初始化模型和 HookManager
-model = MyModel()
-hook_manager = HookManager(model)
+# 3. 注册你感兴趣的层
+# 通过层名称注册
+hook_manager.add(layer_name='conv1')
+hook_manager.add(layer_name='layer4.1.relu')
+# 或者直接传入层对象 (建议提供名称)
+hook_manager.add(layer_name='fully_connected', layer=model.fc)
 
-# 使用 layer_name 注册 hooks（推荐，简单易用）
-hook_manager.register_forward_hook(layer_name="conv1")
+# 4. 执行模型的前向传播
+dummy_input = torch.randn(1, 3, 224, 224)
+with torch.no_grad():
+    output = model(dummy_input)
 
-# 使用 layer 对象注册 hooks（自动命名为：类名+序号）
-hook_manager.register_forward_hook(layer=model.relu)
+# 5. 获取特征
+features_conv1 = hook_manager.get_features('conv1') # 获取 'conv1' 的特征列表
+features_relu = hook_manager.get_features('layer4.1.relu') # 获取 'layer4.1.relu' 的特征列表
+all_features = hook_manager.get_all() # 获取包含所有捕获的特征的字典
 
-# 使用自定义名称注册 hooks（适用于调试时区分不同 hooks）
-hook_manager.register_forward_hook('CustomName', layer=model.fc)
+print(f"Conv1 feature shape: {features_conv1[0].shape}")
+print(f"Layer 4.1 ReLU feature shape: {features_relu[0].shape}")
 
-# 运行模型
-for _ in range(5):
-    # 生成随机输入数据
-    input_tensor = torch.randn(2, 3, 32, 32)
-    output = model(input_tensor)
+# 6. 查看 Hook 状态总结 (可选)
+hook_manager.summary()
 
-# 打印 HookManager 信息
-print(hook_manager)
-print("Current keys:", hook_manager.get_keys())  # 获取所有注册的 hooks 名称
-
-# 获取中间结果（特征图）
-print("\nconv1:", hook_manager.get_features('conv1')[0].shape)  # conv1 的特征图
-print("   fc:", hook_manager.get_features('CustomName')[0].shape)  # fc 的特征图
-
-# 获取所有特征图
-all_features = hook_manager.get_all()
-
-# 将每列的特征图 concat 起来（数据量过大时可能会内存溢出）
-concatenated_features = {key: torch.cat(features, dim=0) for key, features in all_features.items()}
-
-# 计算均值和标准差
-stats = {key: (torch.mean(value), torch.std(value)) for key, value in concatenated_features.items()}
-
-# 打印结果
-print("\nMean and Std of features:")
-for key, (mean, std) in stats.items():
-    print(f"Layer: {key}, Mean: {mean.item():.4f}, Std: {std.item():.4f}")
-
-# 清理 hooks 和特征图
+# 7. 清理 Hook（重要！）
 hook_manager.clear_hooks()
-hook_manager.clear_features()
 ```
 
-输出示例：
-```sh
-Model: MyModel | Total Parameters: 144.46 K
-Layer Name                    Feature Count       Feature Shape                 
---------------------------------------------------------------------------------
-conv1                         5                   (2, 16, 30, 30)               
-ReLU_0                        5                   (2, 16, 30, 30)               
-CustomName                    5                   (2, 10)                       
---------------------------------------------------------------------------------
-Current keys: ['conv1', 'ReLU_0', 'CustomName']
-
-conv1: torch.Size([2, 16, 30, 30])
-   fc: torch.Size([2, 10])
-
-Mean and Std of features:
-Layer: conv1, Mean: -0.0460, Std: 0.5873
-Layer: ReLU_0, Mean: 0.2116, Std: 0.3276
-Layer: CustomName, Mean: -0.0596, Std: 0.2248
-```
-
-## 许可证
-
-MIT License
+关于自定义钩子和输出转换等进阶用法，请参阅博客文章：[English](./BLOG_EN.md) | [中文](./BLOG_CN.md)。
