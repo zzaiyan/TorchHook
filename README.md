@@ -4,8 +4,8 @@
 
 [![PyPI version](https://badge.fury.io/py/torchhook.svg)](https://badge.fury.io/py/torchhook)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/torchhook.svg)](https://pypi.org/project/torchhook/)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/torchhook.svg)](https://pypi.org/project/torchhook/)
+[![Downloads](https://img.shields.io/pypi/dm/torchhook.svg)](https://pypi.org/project/torchhook/)
+[![Python Version](https://img.shields.io/pypi/pyversions/torchhook.svg)](https://pypi.org/project/torchhook/)
 
 [English Blog](./BLOG.md) | [中文博客](./BLOG_CN.md) | [中文文档](./README_CN.md)
 
@@ -69,4 +69,4 @@ hook_manager.summary()
 hook_manager.clear_hooks()
 ```
 
-For advanced usage like custom hooks and output transformations, please refer to the blog posts: [English](./BLOG_EN.md) | [中文](./BLOG_CN.md)
+For advanced usage like custom hooks and output transformations, please refer to the blog posts: [English](./BLOG.md) | [中文](./BLOG_CN.md)
