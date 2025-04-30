@@ -227,6 +227,23 @@ class HookManager:
         # 直接返回特征列表（可能为空）
         return self.features[key]
 
+    def get(self, key: str) -> List[torch.Tensor]:
+        """
+        (alias of get_features) 获取指定层的特征图列表。
+
+        参数:
+        - key (str): 层的名称（layer_name）或唯一标识符。
+
+        返回:
+        - List[torch.Tensor]: 包含捕获的特征图的列表。列表的长度受初始化时的 `max_size` 限制。
+                           如果 hook 尚未触发，则返回空列表。
+
+        异常:
+        - TypeError: 如果 key 不是字符串。
+        - ValueError: 如果指定的 key 未注册 hook。
+        """
+        return self.get_features(key)
+
     def get_all(self) -> Dict[str, List[torch.Tensor]]:
         """
         获取所有捕获的特征图。

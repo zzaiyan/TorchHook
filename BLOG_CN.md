@@ -48,7 +48,8 @@ with torch.no_grad():
 
 # 5. 获取特征
 features_conv1 = hook_manager.get_features('conv1') # 获取 'conv1' 的特征列表
-features_relu = hook_manager.get_features('layer4.1.relu') # 获取 'layer4.1.relu' 的特征列表
+# 也可以使用别名 get
+features_relu = hook_manager.get('layer4.1.relu') # 获取 'layer4.1.relu' 的特征列表
 all_features = hook_manager.get_all() # 获取包含所有捕获的特征的字典
 
 print(f"Conv1 feature shape: {features_conv1[0].shape}")

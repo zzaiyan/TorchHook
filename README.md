@@ -55,8 +55,8 @@ with torch.no_grad():
     output = model(dummy_input)
 
 # 5. Get features
-features_conv1 = hook_manager.get_features('conv1')
-features_relu = hook_manager.get_features('layer4.1.relu')
+features_conv1 = hook_manager.get('conv1')
+features_relu = hook_manager.get('layer4.1.relu')
 all_features = hook_manager.get_all() # Get all features as a dict
 
 print(f"Conv1 feature shape: {features_conv1[0].shape}")

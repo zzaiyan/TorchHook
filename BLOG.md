@@ -48,7 +48,8 @@ with torch.no_grad():
 
 # 5. Get the features
 features_conv1 = hook_manager.get_features('conv1') # Get the list of features for 'conv1'
-features_relu = hook_manager.get_features('layer4.1.relu') # Get the list of features for 'layer4.1.relu'
+# You can also use the alias 'get'
+features_relu = hook_manager.get('layer4.1.relu') # Get the list of features for 'layer4.1.relu'
 all_features = hook_manager.get_all() # Get a dictionary containing all captured features
 
 print(f"Conv1 feature shape: {features_conv1[0].shape}")
