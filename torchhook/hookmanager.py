@@ -10,6 +10,7 @@
 
 
 import torch
+import warnings # Import the warnings module
 from typing import Dict, List, Union, Optional, Callable, Any
 from .utils import format_parameter_count, count_parameters
 
@@ -47,7 +48,7 @@ class HookManager:
         layer_name: Optional[str] = None,
         layer: Optional[torch.nn.Module] = None,
         custom_hook: Optional[Callable[[
-            torch.nn.Module, Any, Any], None]] = None,
+            torch.nn.Module, Any, Any], Optional[torch.Tensor]]] = None, # Modified signature hint
         output_transform: Optional[Callable[[
             torch.Tensor], torch.Tensor]] = None
     ) -> torch.utils.hooks.RemovableHandle:
@@ -57,15 +58,20 @@ class HookManager:
         参数:
         - layer_name (Optional[str]): 层的名称（可选）。如果未指定 layer，则根据 layer_name 在模型中查找层。此名称将用作存储特征和 hook 的键。
         - layer (Optional[torch.nn.Module]): 直接传入的 nnModule 实例（可选）。优先使用此参数。
-        - custom_hook (Optional[Callable]): 自定义 hook 函数（可选）。如果未提供，则使用默认的保存特征图的 hook。签名应为 `hook(module, input, output)`。
-        - output_transform (Optional[Callable]): 自定义函数，用于对 output 张量进行处理（可选）。仅在未使用 custom_hook 时生效。
+        - custom_hook (Optional[Callable]): 自定义 hook 函数（可选）。
+            签名应为 `hook(module, input, output) -> Optional[torch.Tensor]`。
+            它应返回要存储的 torch.Tensor，或者返回 None 表示不存储任何内容。
+            如果提供了 custom_hook，则忽略 output_transform。
+        - output_transform (Optional[Callable]): 自定义函数，用于对 output 张量进行处理（可选）。
+            仅在未提供 custom_hook 时生效。签名应为 `transform(output) -> torch.Tensor`。
 
         返回:
         - torch.utils.hooks.RemovableHandle: 注册的 hook 的句柄，可用于移除 hook。
 
         异常:
         - TypeError: 如果参数类型不符合要求。
-        - ValueError: 如果同时提供 custom_hook 和 output_transform，或未指定 layer_name 和 layer，或指定的 layer_name 已存在。
+        - ValueError: 如果同时提供 custom_hook 和 output_transform（现在允许，但 custom_hook 优先），
+                      或未指定 layer_name 和 layer，或指定的 layer_name 已存在。
         """
         if layer_name is not None and not isinstance(layer_name, str):
             raise TypeError("'layer_name' must be a string or None.")
@@ -76,9 +82,6 @@ class HookManager:
             raise TypeError("'custom_hook' must be a callable or None.")
         if output_transform is not None and not callable(output_transform):
             raise TypeError("'output_transform' must be a callable or None.")
-        if custom_hook and output_transform:
-            raise ValueError(
-                "Cannot provide both 'custom_hook' and 'output_transform'.")
 
         if layer is None:
             if layer_name is None:
@@ -109,35 +112,55 @@ class HookManager:
         # 始终初始化特征列表
         self.features[key] = []
 
-        # 默认的 hook 函数
-        def default_callback(module, input, output):
-            # 使用预先计算好的 key
+        # 定义默认的 output transform
+        def default_output_transform(output: torch.Tensor) -> torch.Tensor:
+            return output.detach().cpu()
+
+        # 最终注册到 PyTorch 的 hook 回调函数
+        def _final_hook_callback(module: torch.nn.Module, input: Any, output: Any):
+            # 使用外部作用域的 key
             current_key = key
+            tensor_to_store: Optional[torch.Tensor] = None
 
-            def default_output_transform(output):
-                return output.detach().cpu()
+            if custom_hook:
+                # 如果提供了自定义 hook，调用它并获取结果
+                result = custom_hook(module, input, output)
+                if result is not None:
+                    if isinstance(result, torch.Tensor):
+                        tensor_to_store = result
+                    else:
+                        # 使用 warnings.warn 替换 print
+                        warnings.warn(f"custom_hook for key '{current_key}' returned a non-Tensor value ({type(result)}). Ignoring.", stacklevel=2)
+                        # 或者 raise TypeError(...)
+            else:
+                # 如果没有自定义 hook，使用 output_transform 或默认 transform
+                transform_fn = output_transform or default_output_transform
+                # 确保 output 是 Tensor 或可以转换为 Tensor
+                if isinstance(output, torch.Tensor):
+                     tensor_to_store = transform_fn(output)
+                elif isinstance(output, (list, tuple)) and len(output) > 0 and isinstance(output[0], torch.Tensor):
+                     # 处理模型输出是元组或列表的情况
+                     tensor_to_store = transform_fn(output[0])
+                     # 使用 warnings.warn 替换 print
+                     warnings.warn(f"Output for key '{current_key}' is a sequence; processing the first element. Use 'output_transform' for custom handling.", stacklevel=2)
+                else:
+                     # 使用 warnings.warn 替换 print
+                     warnings.warn(f"Output for key '{current_key}' is not a Tensor or a sequence starting with a Tensor ({type(output)}). Cannot store.", stacklevel=2)
 
-            # 应用自定义的 output_transform（如果提供）
-            transform_fn = output_transform or default_output_transform
-            processed_output = transform_fn(output)
 
-            # 获取当前键对应的特征列表
-            feature_list = self.features[current_key]
+            # 如果获得了要存储的 Tensor
+            if tensor_to_store is not None:
+                # 获取当前键对应的特征列表
+                feature_list = self.features[current_key]
+                # 添加新特征
+                feature_list.append(tensor_to_store)
+                # 如果设置了 max_size 且列表长度超过限制，则移除旧特征
+                if self.max_size > 0 and len(feature_list) > self.max_size:
+                    # 从列表开头移除多余的元素
+                    del feature_list[:-self.max_size]
 
-            # 添加新特征
-            feature_list.append(processed_output)
-
-            # 如果设置了 max_size 且列表长度超过限制，则移除旧特征
-            if self.max_size > 0 and len(feature_list) > self.max_size:
-                # 从列表开头移除多余的元素
-                del feature_list[:-self.max_size]
-
-
-        # 使用自定义 hook 或默认 hook
-        hook_function = custom_hook or default_callback
-
-        # 注册 hook 并保存句柄
-        hook = layer.register_forward_hook(hook_function)
+        # 注册最终的回调函数
+        hook = layer.register_forward_hook(_final_hook_callback)
         self.hooks[key] = hook  # Store hook handle in the dictionary
 
         return hook

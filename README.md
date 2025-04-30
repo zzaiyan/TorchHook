@@ -1,4 +1,4 @@
-![TorchHook Logo](assets/logo.png)
+![TorchHook Logo](assets/logo.jpg)
 
 # TorchHook
 
