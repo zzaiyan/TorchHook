@@ -15,7 +15,7 @@ TorchHook is a lightweight, easy-to-use Python library designed to simplify the 
 
 - **Easy Hook Registration**: Quickly register hooks for desired model layers by name or object.
 - **Flexible Feature Extraction**: Retrieve captured features easily.
-- **Customizable**: Define custom hook logic or output transformations.
+- **Highly Customizable**: Define custom hook logic or output transformations.
 - **Resource Management**: Automatic cleanup of registered hooks.
 
 ## Installation
