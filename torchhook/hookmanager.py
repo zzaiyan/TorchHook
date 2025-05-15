@@ -326,6 +326,20 @@ class HookManager:
         for key in self.features:
             self.features[key].clear()
 
+    def __del__(self):
+        """
+        HookManager 对象的析构函数。
+        自动清除所有已注册的 hook，以防止内存泄漏。
+        """
+        try:
+            # 只有在 clear_hooks 方法存在时才调用
+            if hasattr(self, 'clear_hooks') and callable(self.clear_hooks):
+                self.clear_hooks()
+        except Exception as e:
+            # 在析构函数中，最好不要抛出异常，而是记录或警告
+            # 使用 warnings 模块，如果需要用户注意的话
+            warnings.warn(f"Error during HookManager cleanup: {e}", RuntimeWarning)
+
     def summary(self):
         """
         打印当前模型的名称、已注册的 hook 信息、特征数量和特征图形状。
